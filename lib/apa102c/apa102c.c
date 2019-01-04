@@ -50,9 +50,12 @@ int apa102c_show(struct apa102c_driver_t *self_p) {
 
     // write end frames
     uint16_t nDWords = self_p->n_leds / 32;
-    do { spi_write(self_p->spi_p, endframe, 4); } while(nDWords--);
+    do {
+        spi_write(self_p->spi_p, endframe, 4);
+    } while (nDWords--);
 
     spi_deselect(self_p->spi_p);
+
     return (0);
 }
 
