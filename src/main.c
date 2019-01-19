@@ -2,7 +2,10 @@
 #include "apa102c.h"
 #include "fast_hsv2rgb.h"
 
-#define LEDS_N 1
+#define LEDS_N 60
+#define SECOND_PRESCALER (LEDS_N / 60)
+#define MINUTE_PRESCALER (LEDS_N / 60)
+#define HOUR_PRESCALER (LEDS_N / 12)
 
 
 struct hsv_t {
@@ -35,10 +38,10 @@ struct hsv_t gradient[] = {
     {HSV_HUE_MAX * 11 / 11, 0xFF, 0xFF}
 };
 
-
-
-uint16_t map(uint8_t x, uint16_t out_min, uint16_t out_max) {
-    return x * (out_max - out_min) / 59 + out_min;
+void map(struct hsv_t *out, uint8_t minute, struct hsv_t lastColor, struct hsv_t nextColor) {
+    out->h = minute * (nextColor.h - lastColor.h) / 59 + lastColor.h;
+    out->s = minute * (nextColor.s - lastColor.s) / 59 + lastColor.s;
+    out->v = minute * (nextColor.v - lastColor.v) / 59 + lastColor.v;
 }
 
 int main() {
@@ -64,22 +67,42 @@ int main() {
     date.minute = 0;
     date.second = 0;
 
-    for (;;) {
-        struct hsv_t currentColor = gradient[date.hour % 12];
-        struct hsv_t nextColor = gradient[(date.hour+1) % 12];
+    struct hsv_t currentColorHsv;
+    currentColorHsv.h = 0;
+    currentColorHsv.s = 0;
+    currentColorHsv.v = 0;
 
-        uint16_t hue = map(date.minute, currentColor.h, nextColor.h);
-        uint8_t sat = map(date.minute, currentColor.s, nextColor.s);
-        uint8_t val = map(date.minute, currentColor.v, nextColor.v);
+    struct rgb_t currentColorRgb;
+
+    for (;;) {
+        // for (uint8_t i = 0; i < LEDS_N; i++) {
+        //     leds[i].r = 0;
+        //     leds[i].g = 0;
+        //     leds[i].b = 0;
+        // }
+        memset(leds, 0, sizeof(struct rgb_t) * LEDS_N);
+
+        map(&currentColorHsv, date.minute, gradient[date.hour % 12], gradient[(date.hour+1) % 12]);
+
+
+        fast_hsv2rgb_8bit(
+            currentColorHsv.h, currentColorHsv.s, currentColorHsv.v,
+            &currentColorRgb.r, &currentColorRgb.g, &currentColorRgb.b);
+
+        for (uint8_t i = 0; i < SECOND_PRESCALER; i++) {
+            leds[date.second + i].r = currentColorRgb.r;
+            leds[date.second + i].g = currentColorRgb.g;
+            leds[date.second + i].b = currentColorRgb.b;
+        }
+
 
         // if (date.second == 0) {
-        //     std_printf(OSTR("%02u %04x %04x %04x \n"), date.minute, currentColor.h, nextColor.h, hue);
+        //     std_printf(OSTR("%02u %04x %04x %04x \n"), date.minute, currentColorHsv.h, nextColor.h, hue);
         // }
-
-        fast_hsv2rgb_8bit(hue, sat, val, &leds[0].r, &leds[0].g, &leds[0].b);
         apa102c_show(&led_driver);
 
-        thrd_sleep_ms(2);
+
+        thrd_sleep_ms(1);
 
         // use a fake clock for now
         // ds3231_get_date(&rtc, &date);
